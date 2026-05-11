@@ -20,8 +20,8 @@ Configure no ambiente ou copie `.env.example`:
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ASPNETCORE_URLS=http://localhost:5001
-AUTH_DB_CONNECTION_STRING=AUTH_DB_CONNECTION_STRING_REDACTED
-JWT_SECRET=JWT_SECRET_PLACEHOLDER
+AUTH_DB_CONNECTION_STRING=
+JWT_SECRET=
 JWT_ISSUER=labtrans-auth-api
 JWT_AUDIENCE=labtrans-reservas
 JWT_EXPIRES_MINUTES=60
@@ -31,7 +31,7 @@ OTEL_TRACES_EXPORTER=none
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
-`JWT_SECRET` precisa ter pelo menos 32 bytes e deve vir do ambiente em execucao real. O valor acima e apenas placeholder.
+`AUTH_DB_CONNECTION_STRING` e `JWT_SECRET` devem ser definidos localmente por variavel de ambiente. `JWT_SECRET` precisa ter pelo menos 32 bytes.
 
 ## Instalar e Rodar
 
@@ -116,7 +116,7 @@ Expoe metricas Prometheus, incluindo `http_requests_total`, `auth_login_success_
 ```json
 {
   "email": "usuario@email.com",
-  "password": "TEST_CREDENTIAL_REDACTED"
+  "password": "<senha-de-desenvolvimento>"
 }
 ```
 
@@ -127,7 +127,7 @@ Retorna usuario sem senha.
 ```json
 {
   "email": "usuario@email.com",
-  "password": "TEST_CREDENTIAL_REDACTED"
+  "password": "<senha-de-desenvolvimento>"
 }
 ```
 
@@ -162,3 +162,12 @@ Authorization: Bearer <token>
 - Runbook operacional: `docs/OPERATIONS.md`.
 - Decisao arquitetural: `docs/ADR-001-observability-strategy.md`.
 - Relatorio: `OBSERVABILITY_REPORT.md`.
+
+## Security Notes
+
+- Secrets reais nao sao versionados.
+- `.env.example` mantem `AUTH_DB_CONNECTION_STRING` e `JWT_SECRET` sem valores.
+- `AUTH_DB_CONNECTION_STRING` e `JWT_SECRET` devem ser definidos localmente ou no ambiente de execucao.
+- `JWT_SECRET` deve ter no minimo 32 bytes em desenvolvimento.
+- O projeto possui varredura de secrets com Gitleaks via workflow dedicado.
+- Nunca commite `.env`, tokens, chaves privadas, connection strings preenchidas ou dumps locais.

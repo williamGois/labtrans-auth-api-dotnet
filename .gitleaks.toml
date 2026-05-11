@@ -1,0 +1,12 @@
+title = "LabTrans Auth API secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-sensitive placeholders and documentation-only keys"
+regexes = [
+  '''AUTH_DB_CONNECTION_STRING=$''',
+  '''JWT_SECRET=$''',
+  '''<senha-de-desenvolvimento>'''
+]

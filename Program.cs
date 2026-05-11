@@ -34,8 +34,12 @@ builder.Services.Configure<JwtSettings>(options =>
 });
 
 var connectionString = builder.Configuration["AUTH_DB_CONNECTION_STRING"]
-    ?? builder.Configuration.GetConnectionString("AuthDb")
-    ?? "AUTH_DB_CONNECTION_STRING_REDACTED";
+    ?? builder.Configuration.GetConnectionString("AuthDb");
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("AUTH_DB_CONNECTION_STRING must be configured.");
+}
 
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(connectionString));

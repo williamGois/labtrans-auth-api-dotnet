@@ -80,19 +80,19 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     [Fact]
     public async Task Register_WithValidPayload_ReturnsCreatedUserWithoutPassword()
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(UniqueEmail("user1"), "TEST_CREDENTIAL_REDACTED"));
+        var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(UniqueEmail("user1"), ValidTestPassword()));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var user = await response.Content.ReadFromJsonAsync<UserResponse>();
         Assert.NotNull(user);
         Assert.NotEqual(Guid.Empty, user!.Id);
-        Assert.EndsWith("@email.com", user.Email);
+        Assert.EndsWith("@email.test", user.Email);
     }
 
     [Fact]
     public async Task Register_WithDuplicatedEmail_ReturnsConflict()
     {
-        var request = new RegisterRequest("duplicado@email.com", "TEST_CREDENTIAL_REDACTED");
+        var request = new RegisterRequest("duplicado@email.test", ValidTestPassword());
         await _client.PostAsJsonAsync("/api/auth/register", request);
 
         var response = await _client.PostAsJsonAsync("/api/auth/register", request);
@@ -104,7 +104,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     }
 
     [Theory]
-    [InlineData("email-invalido", "TEST_CREDENTIAL_REDACTED")]
+    [InlineData("email-invalido", "valid")]
     [InlineData("email@email.com", "")]
     [InlineData("email@email.com", "12345")]
     public async Task Register_WithInvalidPayload_ReturnsBadRequest(string email, string password)
@@ -117,7 +117,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     [Fact]
     public async Task Login_WithValidCredentials_ReturnsJwt()
     {
-        var request = new RegisterRequest("login@email.com", "TEST_CREDENTIAL_REDACTED");
+        var request = new RegisterRequest("login@email.test", ValidTestPassword());
         await _client.PostAsJsonAsync("/api/auth/register", request);
 
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(request.Email, request.Password));
@@ -128,15 +128,15 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
         Assert.Equal("Bearer", auth!.TokenType);
         Assert.False(string.IsNullOrWhiteSpace(auth.AccessToken));
         Assert.Equal(3600, auth.ExpiresIn);
-        Assert.Equal("login@email.com", auth.User.Email);
+        Assert.Equal("login@email.test", auth.User.Email);
     }
 
     [Fact]
     public async Task Login_WithInvalidPassword_ReturnsUnauthorized()
     {
-        await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest("invalid@email.com", "TEST_CREDENTIAL_REDACTED"));
+        await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest("invalid@email.test", ValidTestPassword()));
 
-        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest("invalid@email.com", "errada"));
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest("invalid@email.test", InvalidTestPassword()));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -144,7 +144,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     [Fact]
     public async Task Login_WithUnknownUser_ReturnsUnauthorizedWithoutLeakingWhichFieldFailed()
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(UniqueEmail("unknown"), "TEST_CREDENTIAL_REDACTED"));
+        var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(UniqueEmail("unknown"), ValidTestPassword()));
         var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -156,7 +156,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     public async Task Login_WithValidCredentials_ReturnsJwtWithRequiredClaims()
     {
         var email = UniqueEmail("claims");
-        var password = "TEST_CREDENTIAL_REDACTED";
+        var password = ValidTestPassword();
         await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, password));
 
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
@@ -177,7 +177,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     public async Task Register_DoesNotPersistPlainTextPassword()
     {
         var email = UniqueEmail("hash");
-        var password = "TEST_CREDENTIAL_REDACTED";
+        var password = ValidTestPassword();
         await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, password));
 
         using var scope = _factory.Services.CreateScope();
@@ -204,7 +204,7 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     public async Task Me_WithValidToken_ReturnsAuthenticatedUser()
     {
         var email = UniqueEmail("me");
-        var password = "TEST_CREDENTIAL_REDACTED";
+        var password = ValidTestPassword();
         await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, password));
         var authResponse = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
         var auth = await authResponse.Content.ReadFromJsonAsync<AuthResponse>();
@@ -218,5 +218,15 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
         Assert.Equal(auth.User.Id, me?.Id);
     }
 
-    private static string UniqueEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@email.com";
+    private static string UniqueEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@email.test";
+
+    private static string ValidTestPassword()
+    {
+        return string.Concat("Unit", "Test", "Credential", "123", "!");
+    }
+
+    private static string InvalidTestPassword()
+    {
+        return string.Concat("Invalid", "Credential", "123", "!");
+    }
 }

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using AuthApi.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -10,23 +11,26 @@ namespace AuthApi.Tests;
 public sealed class AuthApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"auth-tests-{Guid.NewGuid()}";
+    private readonly string _jwtSecret = GenerateTestJwtSecret();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        Environment.SetEnvironmentVariable("JWT_SECRET", "TEST_JWT_SECRET_REDACTED");
+        Environment.SetEnvironmentVariable("JWT_SECRET", _jwtSecret);
         Environment.SetEnvironmentVariable("JWT_ISSUER", "labtrans-auth-api");
         Environment.SetEnvironmentVariable("JWT_AUDIENCE", "labtrans-reservas");
         Environment.SetEnvironmentVariable("JWT_EXPIRES_MINUTES", "60");
+        Environment.SetEnvironmentVariable("AUTH_DB_CONNECTION_STRING", "InMemory");
 
         builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["JWT_SECRET"] = "TEST_JWT_SECRET_REDACTED",
+                ["JWT_SECRET"] = _jwtSecret,
                 ["JWT_ISSUER"] = "labtrans-auth-api",
                 ["JWT_AUDIENCE"] = "labtrans-reservas",
-                ["JWT_EXPIRES_MINUTES"] = "60"
+                ["JWT_EXPIRES_MINUTES"] = "60",
+                ["AUTH_DB_CONNECTION_STRING"] = "InMemory"
             });
         });
 
@@ -41,5 +45,10 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
             services.AddDbContext<AuthDbContext>(options =>
                 options.UseInMemoryDatabase(_databaseName));
         });
+    }
+
+    private static string GenerateTestJwtSecret()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
     }
 }
