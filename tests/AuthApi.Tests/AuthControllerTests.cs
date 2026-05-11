@@ -29,6 +29,55 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     }
 
     [Fact]
+    public async Task LiveHealth_ReturnsCorrelationId()
+    {
+        var response = await _client.GetAsync("/health/live");
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("X-Correlation-ID", out var values));
+        Assert.False(string.IsNullOrWhiteSpace(values.Single()));
+        Assert.NotNull(body);
+        Assert.True(body!.ContainsKey("correlationId"));
+    }
+
+    [Fact]
+    public async Task ReadyHealth_ReturnsDatabaseAndConfigurationChecks()
+    {
+        var response = await _client.GetAsync("/health/ready");
+        var body = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.True(body!.ContainsKey("checks"));
+    }
+
+    [Fact]
+    public async Task Response_PreservesClientCorrelationId()
+    {
+        const string correlationId = "test-correlation-id-123";
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health/live");
+        request.Headers.Add("X-Correlation-ID", correlationId);
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("X-Correlation-ID", out var values));
+        Assert.Equal(correlationId, values.Single());
+    }
+
+    [Fact]
+    public async Task Metrics_ReturnsPrometheusMetrics()
+    {
+        var response = await _client.GetAsync("/metrics");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("http_requests_total", body);
+        Assert.Contains("auth_login_success_total", body);
+    }
+
+    [Fact]
     public async Task Register_WithValidPayload_ReturnsCreatedUserWithoutPassword()
     {
         var response = await _client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(UniqueEmail("user1"), "TEST_CREDENTIAL_REDACTED"));
@@ -47,8 +96,11 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
         await _client.PostAsJsonAsync("/api/auth/register", request);
 
         var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+        var problem = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Duplicate email", problem?.Title);
+        Assert.False(string.IsNullOrWhiteSpace(problem?.CorrelationId));
     }
 
     [Theory]
@@ -93,10 +145,11 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     public async Task Login_WithUnknownUser_ReturnsUnauthorizedWithoutLeakingWhichFieldFailed()
     {
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(UniqueEmail("unknown"), "TEST_CREDENTIAL_REDACTED"));
-        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+        var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal("E-mail ou senha invalidos.", error?.Message);
+        Assert.Equal("E-mail ou senha invalidos.", error?.Detail);
+        Assert.False(string.IsNullOrWhiteSpace(error?.CorrelationId));
     }
 
     [Fact]
@@ -140,8 +193,11 @@ public sealed class AuthControllerTests : IClassFixture<AuthApiFactory>
     public async Task Me_WithoutToken_ReturnsUnauthorized()
     {
         var response = await _client.GetAsync("/api/auth/me");
+        var problem = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Unauthorized", problem?.Title);
+        Assert.False(string.IsNullOrWhiteSpace(problem?.CorrelationId));
     }
 
     [Fact]
