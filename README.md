@@ -10,6 +10,8 @@ Microsservico ASP.NET Core Web API responsavel por cadastro, login, hash seguro 
 - JWT Bearer
 - BCrypt.Net-Next
 - xUnit + WebApplicationFactory
+- prometheus-net
+- OpenTelemetry opcional via OTLP
 
 ## Variaveis
 
@@ -24,6 +26,9 @@ JWT_ISSUER=labtrans-auth-api
 JWT_AUDIENCE=labtrans-reservas
 JWT_EXPIRES_MINUTES=60
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+OTEL_SERVICE_NAME=labtrans-auth-api-dotnet
+OTEL_TRACES_EXPORTER=none
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
 `JWT_SECRET` precisa ter pelo menos 32 bytes e deve vir do ambiente em execucao real. O valor acima e apenas placeholder.
@@ -38,7 +43,9 @@ dotnet run --urls http://localhost:5001
 
 URLs:
 
-- Health: `http://localhost:5001/health`
+- Live health: `http://localhost:5001/health/live`
+- Ready health: `http://localhost:5001/health/ready`
+- Metrics: `http://localhost:5001/metrics`
 - Swagger: `http://localhost:5001/swagger`
 
 ## Migrations
@@ -73,13 +80,36 @@ Cobertura funcional atual:
 
 ## Endpoints
 
-### GET `/health`
+### GET `/health/live`
 
 Retorna:
 
 ```json
-{ "status": "ok" }
+{
+  "status": "ok",
+  "service": "labtrans-auth-api-dotnet",
+  "correlationId": "..."
+}
 ```
+
+### GET `/health/ready`
+
+Valida banco e configuracao obrigatoria:
+
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": "ok",
+    "configuration": "ok"
+  },
+  "correlationId": "..."
+}
+```
+
+### GET `/metrics`
+
+Expoe metricas Prometheus, incluindo `http_requests_total`, `auth_login_success_total`, `auth_login_failure_total` e `auth_jwt_issued_total`.
 
 ### POST `/api/auth/register`
 
@@ -122,3 +152,13 @@ Rota protegida por:
 ```text
 Authorization: Bearer <token>
 ```
+
+## Observabilidade e Operacao
+
+- Toda resposta devolve `X-Correlation-ID`.
+- Se o cliente enviar `X-Correlation-ID`, o valor e preservado.
+- Erros usam envelope com `title`, `status`, `detail`, `correlationId` e `timestamp`.
+- Logs sao emitidos em JSON e nao incluem senha, token JWT completo, secret ou connection string.
+- Runbook operacional: `docs/OPERATIONS.md`.
+- Decisao arquitetural: `docs/ADR-001-observability-strategy.md`.
+- Relatorio: `OBSERVABILITY_REPORT.md`.
