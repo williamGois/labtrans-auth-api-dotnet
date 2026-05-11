@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+secrets.json
+
+# .NET
+bin/
+obj/
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Secrets / local data
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.db
+*.sqlite
+*.bak
+*.dump
