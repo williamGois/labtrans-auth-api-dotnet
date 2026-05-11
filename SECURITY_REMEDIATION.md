@@ -31,6 +31,7 @@
 - Ajuste de exemplos para placeholders sem valores sensiveis.
 - Adicao de `.env.example` seguro.
 - Adicao de Gitleaks e workflow de security scan.
+- Ajuste do workflow para executar Gitleaks CLI diretamente, sem depender do range de push do GitHub apos rewrite de historico.
 - Limpeza do historico Git.
 - Push com `--force-with-lease`.
 

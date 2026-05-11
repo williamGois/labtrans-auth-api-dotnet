@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
 
     steps:
       - name: Checkout
@@ -19,11 +18,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+      - name: Run Gitleaks working tree scan
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/repo" \
+            --entrypoint sh \
+            zricethezav/gitleaks:v8.24.3 \
+            -c "git config --global --add safe.directory /repo && gitleaks detect --source=/repo --no-git --redact --config=/repo/.gitleaks.toml"
+
+      - name: Run Gitleaks git history scan
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/repo" \
+            --entrypoint sh \
+            zricethezav/gitleaks:v8.24.3 \
+            -c "git config --global --add safe.directory /repo && gitleaks detect --source=/repo --redact --config=/repo/.gitleaks.toml"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
