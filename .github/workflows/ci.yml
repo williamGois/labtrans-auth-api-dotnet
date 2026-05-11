@@ -26,3 +26,6 @@ jobs:
 
       - name: Test
         run: dotnet test tests/AuthApi.Tests/AuthApi.Tests.csproj --configuration Release --no-restore
+
+      - name: Vulnerability audit
+        run: dotnet list AuthApi.csproj package --vulnerable --include-transitive
