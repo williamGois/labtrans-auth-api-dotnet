@@ -6,13 +6,17 @@ using AuthApi.Data;
 using AuthApi.Dtos;
 using AuthApi.Entities;
 using AuthApi.Exceptions;
+using AuthApi.Observability;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace AuthApi.Services;
 
-public sealed class AuthService(AuthDbContext dbContext, IOptions<JwtSettings> jwtOptions) : IAuthService
+public sealed class AuthService(
+    AuthDbContext dbContext,
+    IOptions<JwtSettings> jwtOptions,
+    ILogger<AuthService> logger) : IAuthService
 {
     private readonly JwtSettings _jwtSettings = jwtOptions.Value;
 
@@ -22,6 +26,8 @@ public sealed class AuthService(AuthDbContext dbContext, IOptions<JwtSettings> j
         var exists = await dbContext.Users.AnyAsync(user => user.Email == normalizedEmail, cancellationToken);
         if (exists)
         {
+            AuthMetrics.RegisterFailure.WithLabels("duplicate_email").Inc();
+            logger.LogWarning("Registration rejected because email already exists.");
             throw new DuplicateEmailException("E-mail ja cadastrado.");
         }
 
@@ -33,6 +39,8 @@ public sealed class AuthService(AuthDbContext dbContext, IOptions<JwtSettings> j
 
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(cancellationToken);
+        AuthMetrics.RegisterSuccess.Inc();
+        logger.LogInformation("User registered successfully. userId={UserId}", user.Id);
         return ToUserResponse(user);
     }
 
@@ -42,11 +50,17 @@ public sealed class AuthService(AuthDbContext dbContext, IOptions<JwtSettings> j
         var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Email == normalizedEmail, cancellationToken);
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
+            AuthMetrics.LoginFailure.WithLabels("invalid_credentials").Inc();
+            AuthMetrics.InvalidCredentials.Inc();
+            logger.LogWarning("Login rejected by invalid credentials.");
             throw new InvalidCredentialsException("E-mail ou senha invalidos.");
         }
 
         var expiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpiresMinutes);
         var token = GenerateToken(user, expiresAt);
+        AuthMetrics.LoginSuccess.Inc();
+        AuthMetrics.JwtIssued.Inc();
+        logger.LogInformation("Login succeeded and JWT was issued. userId={UserId}", user.Id);
 
         return new AuthResponse(
             token,

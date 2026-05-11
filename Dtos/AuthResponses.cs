@@ -9,3 +9,10 @@ public sealed record AuthResponse(
     UserResponse User);
 
 public sealed record ErrorResponse(string Message);
+
+public sealed record ApiErrorResponse(
+    string Title,
+    int Status,
+    string Detail,
+    string CorrelationId,
+    DateTime Timestamp);

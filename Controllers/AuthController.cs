@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using AuthApi.Dtos;
 using AuthApi.Exceptions;
+using AuthApi.Observability;
 using AuthApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +14,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 {
     [HttpPost("register")]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<UserResponse>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {
         try
@@ -23,13 +24,17 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         }
         catch (DuplicateEmailException exception)
         {
-            return Conflict(new ErrorResponse(exception.Message));
+            return Conflict(ApiErrorFactory.Create(
+                HttpContext,
+                StatusCodes.Status409Conflict,
+                "Duplicate email",
+                exception.Message));
         }
     }
 
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         try
@@ -38,7 +43,11 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         }
         catch (InvalidCredentialsException exception)
         {
-            return Unauthorized(new ErrorResponse(exception.Message));
+            return Unauthorized(ApiErrorFactory.Create(
+                HttpContext,
+                StatusCodes.Status401Unauthorized,
+                "Unauthorized",
+                exception.Message));
         }
     }
 
@@ -53,12 +62,25 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 
         if (!Guid.TryParse(rawUserId, out var userId))
         {
-            return Unauthorized(new ErrorResponse("Token sem identificador de usuario valido."));
+            AuthMetrics.ProtectedRouteUnauthorized.WithLabels("missing_user_id").Inc();
+            return Unauthorized(ApiErrorFactory.Create(
+                HttpContext,
+                StatusCodes.Status401Unauthorized,
+                "Unauthorized",
+                "Token sem identificador de usuario valido."));
         }
 
         var user = await authService.GetUserAsync(userId, cancellationToken);
-        return user is null
-            ? Unauthorized(new ErrorResponse("Usuario do token nao foi encontrado."))
-            : Ok(user);
+        if (user is null)
+        {
+            AuthMetrics.ProtectedRouteUnauthorized.WithLabels("user_not_found").Inc();
+            return Unauthorized(ApiErrorFactory.Create(
+                HttpContext,
+                StatusCodes.Status401Unauthorized,
+                "Unauthorized",
+                "Usuario do token nao foi encontrado."));
+        }
+
+        return Ok(user);
     }
 }
