@@ -16,6 +16,11 @@ obj/
 .vs/
 .vscode/
 
+# Python smoke scripts
+__pycache__/
+**/__pycache__/
+*.pyc
+
 # Secrets / local data
 *.pem
 *.key
