@@ -65,6 +65,14 @@ dotnet format AuthApi.csproj --verify-no-changes
 dotnet list AuthApi.csproj package --vulnerable --include-transitive
 ```
 
+Smoke de integracao usado no CI, com a API rodando contra PostgreSQL real:
+
+```powershell
+python scripts\ci_integration_smoke.py
+```
+
+O workflow `.github/workflows/ci.yml` sobe `postgres:16-alpine` com autenticacao local por trust, aplica migrations via `APPLY_MIGRATIONS=true`, registra usuario, faz login, valida claims do JWT, chama `/api/auth/me` e confere `/metrics`.
+
 Cobertura funcional atual:
 
 - Health check.
