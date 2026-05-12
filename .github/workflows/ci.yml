@@ -9,6 +9,20 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: auth_ci
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d auth_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,6 +40,27 @@ jobs:
 
       - name: Test
         run: dotnet test tests/AuthApi.Tests/AuthApi.Tests.csproj --configuration Release --no-restore
+
+      - name: PostgreSQL integration smoke
+        run: |
+          set -euo pipefail
+          export ASPNETCORE_ENVIRONMENT=Development
+          export ASPNETCORE_URLS=http://127.0.0.1:5001
+          export AUTH_DB_CONNECTION_STRING="Host=localhost;Port=5432;Database=auth_ci;Username=postgres"
+          export JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export JWT_ISSUER=labtrans-auth-api
+          export JWT_AUDIENCE=labtrans-reservas
+          export JWT_EXPIRES_MINUTES=60
+          export CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+          export APPLY_MIGRATIONS=true
+          dotnet run --project AuthApi.csproj --configuration Release --no-build --no-launch-profile > auth-api.log 2>&1 &
+          api_pid=$!
+          if ! python3 scripts/ci_integration_smoke.py; then
+            cat auth-api.log
+            kill "$api_pid" || true
+            exit 1
+          fi
+          kill "$api_pid" || true
 
       - name: Vulnerability audit
         run: dotnet list AuthApi.csproj package --vulnerable --include-transitive
